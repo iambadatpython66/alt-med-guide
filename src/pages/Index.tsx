@@ -13,45 +13,47 @@ const Index = () => {
     setResults(null);
 
     try {
-      // TODO: Implement actual API call to Gemini AI via edge function
-      // For now, showing mock data
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockResults = {
-        originalMedicine: query || "Detected Medicine from Image",
-        alternatives: [
-          {
-            name: "Generic Alternative A",
-            activeIngredient: "Same Active Compound",
-            dosage: "500mg",
-            manufacturer: "Generic Pharma Co.",
-            notes: "Cost-effective alternative with same efficacy",
-            similarity: "95% Match"
-          },
-          {
-            name: "Brand Alternative B",
-            activeIngredient: "Similar Compound",
-            dosage: "500mg",
-            manufacturer: "Leading Pharma",
-            notes: "Widely available in most pharmacies",
-            similarity: "88% Match"
-          },
-          {
-            name: "Generic Alternative C",
-            activeIngredient: "Alternative Formula",
-            dosage: "250mg x 2",
-            manufacturer: "Trust Pharma",
-            notes: "Different dosing schedule, similar results",
-            similarity: "82% Match"
-          }
-        ]
-      };
+      let requestBody: any = {};
 
-      setResults(mockResults);
+      if (image) {
+        // Convert image to base64
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(image);
+        });
+        
+        const base64 = await base64Promise;
+        requestBody.imageBase64 = base64;
+      } else {
+        requestBody.medicineName = query;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-medicine`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Analysis failed');
+      }
+
+      const result = await response.json();
+      setResults(result);
       toast.success("Analysis complete! Found alternatives.");
     } catch (error) {
-      toast.error("Failed to analyze. Please try again.");
-      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to analyze";
+      toast.error(errorMessage);
+      console.error('Analysis error:', error);
     } finally {
       setIsLoading(false);
     }
